@@ -13,6 +13,7 @@ so the app lets you type your MT5 price and shifts every level by the difference
 """
 import json
 import os
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 import numpy as np
@@ -41,7 +42,14 @@ NY = "America/New_York"
 
 def fetch(symbol="GC=F"):
     def get(interval, period):
-        d = yf.download(symbol, period=period, interval=interval, progress=False, auto_adjust=False)
+        for attempt in range(4):                       # Yahoo sometimes rate-limits cloud servers
+            d = yf.download(symbol, period=period, interval=interval, progress=False, auto_adjust=False)
+            if len(d):
+                break
+            time.sleep(20 * (attempt + 1))
+        else:
+            raise SystemExit(f"Could not download {symbol} {interval} prices from Yahoo (rate limited?). "
+                             "The page keeps its previous version and shows it as out of date.")
         d.columns = d.columns.get_level_values(0)
         d = d[["Open", "High", "Low", "Close"]].dropna()
         d.index = d.index.tz_convert("UTC")
