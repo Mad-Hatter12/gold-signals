@@ -71,7 +71,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: grid; gap: 12px; }
 .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 label { display: grid; gap: 4px; font-size: 12.5px; color: var(--muted); min-width: 0; }
-input { font: 500 16px var(--mono); padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); width: 100%; box-sizing: border-box; }
+input, select { font: 500 16px var(--mono); padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); width: 100%; box-sizing: border-box; }
 .full { grid-column: 1 / -1; }
 
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -123,12 +123,15 @@ footer { font-size: 12.5px; color: var(--muted); display: grid; gap: 6px; }
   <section class="panel" aria-labelledby="set-h">
     <h2 id="set-h">My account</h2>
     <div class="fields">
-      <label>Account balance (USD)<input id="bal" type="number" inputmode="decimal" min="0" step="1" value="1000"></label>
+      <label>Account balance<input id="bal" type="number" inputmode="decimal" min="0" step="0.01" value="1000"></label>
+      <label>Account currency<select id="ccy"><option value="USD">USD $</option><option value="GBP">GBP £</option><option value="EUR">EUR €</option></select></label>
+      <label id="fxl">1 unit of my currency = how many USD<input id="fx" type="number" inputmode="decimal" min="0.1" step="0.01" value="1.30"></label>
+      <label>Max risk per trade (%)<input id="maxrisk" type="number" inputmode="decimal" min="0.1" max="100" step="0.5" value="2"></label>
       <label>Risk scale<input id="scale" type="number" inputmode="decimal" min="0.1" max="1" step="0.1" value="0.5"></label>
       <label class="full">XAUUSD price on my MT5 now (optional — lines the levels up with your broker)<input id="mt5" type="number" inputmode="decimal" step="0.01" placeholder="e.g. 4128.40"></label>
       <label class="full">Ounces per 1.00 lot on my broker<input id="oz" type="number" inputmode="decimal" min="1" step="1" value="100"></label>
     </div>
-    <small class="muted">Risk scale 0.5 = half the tested risk, recommended while you test. Saved on this phone only.</small>
+    <small class="muted">Risk scale 0.5 = half the tested risk, recommended while you test. Max risk per trade: if even the smallest trade (0.01 lot) would risk more than this, the app tells you to skip it. Check the exchange rate in your banking or broker app. Saved on this phone only.</small>
     <div id="sizing" class="tbl"></div>
     <div class="stale" id="toosmall" hidden></div>
   </section>
@@ -196,7 +199,7 @@ const money = (v) => "$" + v.toLocaleString(undefined, { maximumFractionDigits: 
 
 function load(k, d) { try { const v = localStorage.getItem("gs-" + k); return v === null ? d : v; } catch { return d; } }
 function save(k, v) { try { localStorage.setItem("gs-" + k, v); } catch {} }
-["bal", "scale", "mt5", "oz"].forEach((k) => {
+["bal", "ccy", "fx", "maxrisk", "scale", "mt5", "oz"].forEach((k) => {
   const el = $(k); el.value = load(k, el.value);
   el.addEventListener("input", () => { save(k, el.value); render(); });
 });
@@ -216,12 +219,27 @@ function nyToLocal(h, m) {
   }
 }
 
+function account() {
+  const ccy = $("ccy").value, fx = ccy === "USD" ? 1 : (+$("fx").value || 1);
+  $("fxl").hidden = ccy === "USD";
+  return { bal: (+$("bal").value || 0) * fx, sym: { USD: "$", GBP: "£", EUR: "€" }[ccy], fx,
+           scale: Math.min(1, Math.max(0.1, +$("scale").value || 0.5)), oz: +$("oz").value || 100, max: +$("maxrisk").value || 2 };
+}
+// Returns what to trade for a given stop distance (USD per oz) and target risk %
+function sizeFor(stop, riskPct) {
+  const a = account(), usd = a.bal * riskPct / 100, lots = stop > 0 ? usd / (stop * a.oz) : 0;
+  const local = (v) => a.sym + (v / a.fx).toLocaleString(undefined, { maximumFractionDigits: 2 });
+  if (lots >= 0.01) return { ok: true, lots: Math.floor(lots * 100) / 100, pct: riskPct, txt: local(usd) };
+  const minUsd = 0.01 * a.oz * stop, minPct = a.bal > 0 ? minUsd / a.bal * 100 : Infinity;
+  if (minPct <= a.max) return { ok: true, lots: 0.01, pct: minPct, txt: local(minUsd), forced: true };
+  return { ok: false, lots: 0, pct: minPct, txt: local(minUsd), max: a.max };
+}
+
 function ticket(s, offset) {
-  const bal = +$("bal").value || 0, scale = Math.min(1, Math.max(0.1, +$("scale").value || 0.5)), oz = +$("oz").value || 100;
   const conv = s.conviction || "NORMAL", mult = s.size_mult || 1;
-  const riskPct = s.risk_pct * scale * mult, riskUsd = bal * riskPct / 100;
-  const lots = s.sl_dist > 0 ? riskUsd / (s.sl_dist * oz) : 0;
-  const lotTxt = lots >= 0.01 ? (Math.floor(lots * 100) / 100).toFixed(2) + " lot" : "below 0.01 lot";
+  const riskPct = s.risk_pct * account().scale * mult;
+  const z = sizeFor(s.sl_dist, riskPct);
+  const lotTxt = z.ok ? z.lots.toFixed(2) + " lot" : "SKIP";
   const L = (v) => v == null ? "—" : (v + offset).toFixed(2);
   const pips = (d) => d == null ? "" : `${money(d)} · ${Math.round(d * 10)} pips`;
   const el = document.createElement("article");
@@ -233,7 +251,10 @@ function ticket(s, offset) {
       <div class="sl"><span class="k">Stop loss</span><span class="v">${L(s.sl)}</span><span class="d">${pips(s.sl_dist)}</span></div>
       <div class="tp"><span class="k">Take profit</span><span class="v">${L(s.tp)}</span><span class="d">${s.tp == null ? "time exit" : pips(s.tp_dist)}</span></div>
     </div>
-    <div class="size"><span>Position size<br><small class="muted">${riskPct.toFixed(2)}% of account${mult !== 1 ? ` (×${mult} for ${conv.toLowerCase()})` : ""} = ${money(riskUsd)} at risk${s.rr ? ` · reward ${s.rr}× risk` : ""}</small></span><span class="big">${lotTxt}</span></div>
+    <div class="size"${z.ok && !z.forced ? "" : ' style="background:var(--warn-soft)"'}><span>Position size<br><small class="muted">${
+      !z.ok ? `Too big for your account: even 0.01 lot risks ${z.txt} (${z.pct.toFixed(0)}%), above your ${z.max}% limit.`
+      : z.forced ? `Smallest trade (0.01 lot) risks ${z.txt} = ${z.pct.toFixed(1)}% of your account. More than the plan's ${riskPct.toFixed(2)}%.`
+      : `${z.pct.toFixed(2)}% of account${mult !== 1 ? ` (×${mult} for ${conv.toLowerCase()})` : ""} = ${z.txt} at risk`}${s.rr ? ` · reward ${s.rr}× risk` : ""}</small></span><span class="big">${lotTxt}</span></div>
     <div class="why"><strong class="cnote"></strong><span class="txt"></span><small class="muted">Valid until ${fmtT(s.valid_until)} (your time)</small>
       <div class="actions"><button type="button">Copy levels</button></div></div>`;
   el.querySelector(".order").textContent = s.order;
@@ -249,26 +270,23 @@ function ticket(s, offset) {
 }
 
 // Typical stop distances in 2026 (median from the backtest), used for the always-on sizing preview
-const TYPICAL = [["Your rules (v3)", 2.0, 52], ["NY opening-range breakout", 1.0, 34], ["Session drift", 0.5, 72]];
+const TYPICAL = [["Your rules (v3)", 2.0, 18], ["NY opening-range breakout", 1.0, 34], ["Session drift", 0.5, 72]];
 function sizing() {
-  const bal = +$("bal").value || 0, scale = Math.min(1, Math.max(0.1, +$("scale").value || 0.5)), oz = +$("oz").value || 100;
-  let tooSmall = false;
+  const a = account();
+  let forced = false, skipped = 0;
   const rows = TYPICAL.map(([name, risk, stop]) => {
-    const pct = risk * scale, usd = bal * pct / 100, lots = usd / (stop * oz);
-    const minRiskPct = bal > 0 ? (0.01 * oz * stop) / bal * 100 : Infinity;
-    const lotTxt = lots >= 0.01 ? (Math.floor(lots * 100) / 100).toFixed(2) : "below 0.01";
-    if (lots < 0.01) tooSmall = true;
-    return `<tr><td>${name}</td><td class="num">${pct.toFixed(2)}% = ${money(usd)}</td><td class="num">~$${stop}</td><td class="num">${lotTxt}</td></tr>`;
+    const z = sizeFor(stop, risk * a.scale);
+    if (!z.ok) skipped++; else if (z.forced) forced = true;
+    const cell = !z.ok ? "skip" : z.lots.toFixed(2);
+    return `<tr><td>${name}</td><td class="num">${z.pct.toFixed(z.pct < 1 ? 2 : 0)}% = ${z.txt}</td><td class="num">~$${stop}</td><td class="num">${cell}</td></tr>`;
   }).join("");
-  $("sizing").innerHTML = `<table><tr><th>If a trade comes</th><th>You risk</th><th>Typical stop</th><th>Lot size</th></tr>${rows}</table>`;
+  $("sizing").innerHTML = `<table><tr><th>If a trade comes</th><th>You'd risk</th><th>Typical stop</th><th>Lot size</th></tr>${rows}</table>`;
   const box = $("toosmall");
-  box.hidden = !tooSmall;
-  if (tooSmall) {
-    const need = Math.ceil((0.01 * oz * 34) / (1.0 * scale / 100) / 100) * 100;
-    const minPct = bal > 0 ? (0.01 * oz * 34) / bal * 100 : 0;
-    box.textContent = `Your balance is too small for these trades. Most brokers' smallest gold trade is 0.01 lot, and with a typical $34 stop that risks $${(0.01 * oz * 34).toFixed(0)}`
-      + (bal > 0 ? ` (${minPct.toFixed(0)}% of your account) on one trade.` : ".")
-      + ` To trade the NY breakout at your risk scale you need about $${need.toLocaleString()}. Practise on a demo account, or ask your broker for a "cent" account.`;
+  box.hidden = !(forced || skipped);
+  if (forced || skipped) {
+    box.textContent = `Your account is smaller than these trades need. The smallest gold trade is 0.01 lot, so some trades risk far more than the plan's 0.25–2%.`
+      + ` In a simulation of the NY breakout at 0.01 lot from $50, 89% of accounts were wiped out within about 2 months.`
+      + ` Safer: a demo account, or a cent account (set ounces per lot to 1).`;
   }
 }
 
