@@ -21,7 +21,7 @@ import pandas as pd
 import yfinance as yf
 
 from news import events
-from strategy_v2 import Config2, candidates, daily_bias, ltf_arrays, tday
+from strategy_v2 import LTF_OF, Config2, candidates, daily_bias, ltf_arrays, tday
 
 ROOT = Path(__file__).parent
 APP = ROOT / "app"                                         # holds template.html
@@ -102,9 +102,10 @@ def sig(sid, strategy, side, kind, entry, sl, tp, risk_pct, valid_until, why, se
                 risk_pct=risk_pct, valid_until=valid_until, why=why)
 
 
-def v3_signals(m15, m30, h1, bias_today):
+def v3_signals(m15, m30, h1, bias_today, trace=None):
     armed = []
-    cands, _ = candidates(h1, {"M15": ltf_arrays(m15, V3), "M30": ltf_arrays(m30, V3)}, V3, armed=armed)
+    ltfs = {"M15": ltf_arrays(m15, V3), "M30": ltf_arrays(m30, V3)}
+    cands, _ = candidates(h1, ltfs, V3, armed=armed, trace=trace)
     out, now = [], pd.Timestamp.now(tz="UTC")
     today = tday(now)
     for a in armed:
@@ -126,6 +127,75 @@ def v3_signals(m15, m30, h1, bias_today):
         out.append(sig(f"v3-{a['tf']}-{a['since']:%Y%m%d%H%M}-{side}", "Your rules (v3)", side,
                        f"{side} LIMIT", a["entry"], a["sl"], a["tp"], RISK["v3"], day_end, what, setup_kind=a["kind"]))
     return out
+
+
+def unix(ts):
+    return int(pd.Timestamp(ts).timestamp())
+
+
+def candles(df, n):
+    d = df.tail(n)
+    return [[unix(t), round(r.Open, 2), round(r.High, 2), round(r.Low, 2), round(r.Close, 2)] for t, r in d.iterrows()]
+
+
+def setup_story(st, r, L):
+    """Plain description of one v3 setup for the chart tab: zone, pattern, neckline, status."""
+    t = L["t"]
+    pat = st.get("pattern")
+    d = dict(tf=st["tf"], ltf=LTF_OF[st["tf"]], dir=st["dir"], t=unix(st["t"]), end=unix(st["life_end"]),
+             zlo=round(st["zlo"], 2), zhi=round(st["zhi"], 2), line=round(st["line"], 2),
+             touched=unix(t[st["touched_bar"]]) if "touched_bar" in st else None)
+    if pat:
+        d["pattern"] = dict(kind=pat["kind"], t1=unix(t[pat["l1"]]), p1=round(pat["p1"], 2),
+                            t2=unix(t[pat["l2"]]), p2=round(pat["p2"], 2), neck=round(pat["neck"], 2))
+    if "brk_bar" in st:
+        d["neck_break"] = unix(t[st["brk_bar"]])
+    if "flip_bar" in st:
+        d["flip"] = unix(t[st["flip_bar"]])
+    open_ = st["b1"] >= len(t) - 1
+    if r and r.get("armed"):
+        d["status"] = "flip order waiting" if r["kind"] == "flip" else "order waiting at neckline"
+        d["order"] = dict(entry=round(r["entry"], 2), sl=round(r["sl"], 2), tp=round(r["tp"], 2))
+    elif r and "fill_bar" in r:
+        d["status"] = "filled"
+        d["order"] = dict(entry=round(r["entry"], 2), sl=round(r["sl"], 2), tp=round(r["tp"], 2), filled=unix(r["time"]))
+    elif "brk_bar" in st and not open_:
+        d["status"] = "neckline broke, no valid entry"
+        d["why_none"] = "The pullback to the neckline came on a later day (orders don't carry over), or the target was too small versus the stop."
+    elif "brk_bar" in st:
+        d["status"] = "neckline broke: no valid entry yet"
+    elif not open_:
+        d["status"] = "expired: no confirmation" if not pat else "expired"
+    elif "flip_bar" in st:
+        d["status"] = "broke through: watching for flip entry"
+    elif pat:
+        d["status"] = "pattern found: waiting for neckline break"
+    elif d["touched"]:
+        d["status"] = "price in zone: looking for a pattern"
+    else:
+        d["status"] = "waiting for pullback into zone"
+    return d
+
+
+def opening_range(m15):
+    nyt = m15.index.tz_convert(NY)
+    out = []
+    for day in sorted(set(nyt.date))[-3:]:
+        mins = nyt.hour * 60 + nyt.minute
+        rng = m15[(nyt.date == day) & (mins >= 570) & (mins < 600)]
+        if len(rng) == 2:
+            start = rng.index[0]
+            out.append(dict(t0=unix(start), t1=unix(start + pd.Timedelta(hours=3, minutes=30)),
+                            hi=round(rng.High.max(), 2), lo=round(rng.Low.min(), 2)))
+    return out
+
+
+def chart_payload(m15, h1, trace, ltfs):
+    since = pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=30)
+    stories = [setup_story(st, r, ltfs[LTF_OF[st["tf"]]]) for st, r in trace if st["t"] >= since]
+    h4 = h1.resample("4h").agg(dict(Open="first", High="max", Low="min", Close="last")).dropna()
+    return dict(M15=candles(m15, 2100), H1=candles(h1, 720), H4=candles(h4, 400),
+                setups=stories[-8:], ranges=opening_range(m15))
 
 
 def orb_signal(m15, bias_today):
@@ -180,7 +250,10 @@ def main():
     b = int(bias.get(td, bias.iloc[-1]))
     p = parts.loc[td] if td in parts.index else parts.iloc[-1]
     news_today = td in set(tday(events()))
-    sigs = [] if news_today else v3_signals(m15, m30, h1, b) + orb_signal(m15, b) + drift_signal(m15, h1, b)
+    trace = []
+    v3 = v3_signals(m15, m30, h1, b, trace)
+    sigs = [] if news_today else v3 + orb_signal(m15, b) + drift_signal(m15, h1, b)
+    chart = chart_payload(m15, h1, trace, {"M15": ltf_arrays(m15, V3), "M30": ltf_arrays(m30, V3)})
 
     hist = json.loads(HIST.read_text()) if HIST.exists() else []
     known = {h["id"] for h in hist}
@@ -195,13 +268,14 @@ def main():
                 price_time=m15.index[-1].isoformat(), source="Gold futures GC=F (Yahoo, ~15 min delayed)",
                 storyline=dict(monthly=word[int(p["M"])], weekly=word[int(p["W"])], daily=word[int(p["D"])],
                                bias={1: "BUY only", -1: "SELL only", 0: "No trend: stand aside"}[b]),
-                news_today=news_today, signals=sigs, history=hist[::-1][:30])
+                news_today=news_today, signals=sigs, history=hist[::-1][:30], chart=chart)
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / "signals.json").write_text(json.dumps(data, indent=1))
     page = (APP / "template.html").read_text().replace("/*__DATA__*/null", json.dumps(data))
     (OUT / "index.html").write_text(HEAD + page + "</body></html>")
     (OUT / "robots.txt").write_text("User-agent: *\nDisallow: /\n")
-    print(json.dumps({k: data[k] for k in ("generated_at", "price", "storyline", "news_today")}), f"{len(sigs)} signal(s)")
+    print(json.dumps({k: data[k] for k in ("generated_at", "price", "storyline", "news_today")}), f"{len(sigs)} signal(s),",
+          f"{len(chart['setups'])} recent setup(s) on the chart")
 
 
 if __name__ == "__main__":

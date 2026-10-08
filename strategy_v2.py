@@ -134,6 +134,7 @@ def scan(setup, L, cfg):
             return None
         if not touched and Lo[b] <= zhi:
             touched = True
+            setup["touched_bar"] = b                   # recorded for the chart view
         j = b - k
         if j >= b0:
             if ph[j]: highs.append(j)
@@ -148,14 +149,17 @@ def scan(setup, L, cfg):
                         if neck > Lo[l2]:
                             kind = "double" if abs(Lo[l2] - Lo[l1]) <= cfg.dbl_tol_atr * la[l2] else "higher-low"
                             pat = (neck, Lo[l2], l2, kind)
+                            setup["pattern"] = dict(l1=int(l1), p1=s * Lo[l1], l2=int(l2), p2=s * Lo[l2],
+                                                    neck=s * neck, kind=kind)
         if pat is None:
             continue
         neck, low2, l2, kind = pat
         if brk is None:
             if Lo[b] < low2:                         # pattern failed before breaking out
-                pat = None; continue
+                pat = None; setup.pop("pattern", None); continue
             if C[b] > neck:
                 brk, peak = b, H[b]
+                setup["brk_bar"] = b
             continue
         if Lo[b] <= neck and b > brk:               # pullback fills the limit at the neckline
             if tday(L["t"][b]) != tday(L["t"][brk]):  # rule 9: pending orders don't survive the day
@@ -229,8 +233,9 @@ def ltf_arrays(df, cfg):
                 ph=ph, pl=pl)
 
 
-def candidates(h1, ltfs, cfg, armed=None):
-    """armed: pass a list to also collect setups still waiting for their fill (live signals)."""
+def candidates(h1, ltfs, cfg, armed=None, trace=None):
+    """armed: pass a list to also collect setups still waiting for their fill (live signals).
+    trace: pass a list to collect every setup with its outcome (for the chart view)."""
     bias, _ = daily_bias(h1, cfg)
     htfs = {"H1": resample(h1, "1h"), "H4": resample(h1, "4h")}
     cands = []
@@ -244,7 +249,10 @@ def candidates(h1, ltfs, cfg, armed=None):
             r = scan(st, L, cfg)
             if r and r["flip"]:
                 st["flipped"] = True
+                st["flip_bar"] = r["bar"]
                 r = scan_flip(st, r["bar"], L, cfg)
+            if trace is not None:
+                trace.append((st, r))
             if r and r.get("armed"):
                 if armed is not None and st["b1"] >= len(L["t"]) - 1:   # setup window still open
                     armed.append(dict(r, setup_time=st["t"]))

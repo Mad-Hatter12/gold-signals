@@ -81,6 +81,21 @@ th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: 
 .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .stats div { display: grid; }
 .stats .v { font-family: var(--mono); font-size: 18px; }
+.tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; background: var(--line); padding: 4px; border-radius: 10px; position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; }
+.tabs button { border: 0; background: transparent; font: 600 14px var(--body); padding: 8px; border-radius: 7px; color: var(--muted); }
+.tabs button[aria-selected="true"] { background: var(--surface); color: var(--ink); }
+.tfs { display: flex; gap: 6px; flex-wrap: wrap; }
+.tfs button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+#chart { height: 380px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; color: var(--muted); }
+.legend i { display: inline-block; width: 18px; height: 0; border-top: 2px solid; vertical-align: middle; margin-right: 5px; }
+.story-card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: grid; gap: 8px; text-align: left; cursor: pointer; font: inherit; color: inherit; width: 100%; }
+.story-card[aria-pressed="true"] { border-color: var(--gold); border-width: 2px; }
+.story-card .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.story-card ol { margin: 0; padding-left: 20px; display: grid; gap: 4px; font-size: 13.5px; }
+.chip { font: 600 11.5px var(--body); padding: 2px 8px; border-radius: 999px; background: var(--line); color: var(--ink); }
+.chip.live { background: var(--gold-soft); color: var(--gold); }
+.note { font-size: 12.5px; color: var(--warn); }
 footer { font-size: 12.5px; color: var(--muted); display: grid; gap: 6px; }
 @media (max-width: 380px) { .story { grid-template-columns: repeat(3, 1fr); } .story > div:last-child { grid-column: 1 / -1; } .levels .v { font-size: 16px; } }
 </style>
@@ -94,6 +109,12 @@ footer { font-size: 12.5px; color: var(--muted); display: grid; gap: 6px; }
 
   <section class="story" id="story" aria-label="Storyline"></section>
 
+  <nav class="tabs" role="tablist">
+    <button type="button" role="tab" id="t-signals" aria-selected="true" aria-controls="tab-signals">Signals</button>
+    <button type="button" role="tab" id="t-chart" aria-selected="false" aria-controls="tab-chart">Chart</button>
+  </nav>
+
+  <div id="tab-signals" role="tabpanel" style="display:grid;gap:18px">
   <section style="display:grid;gap:10px">
     <h2>Trades right now</h2>
     <div id="signals" style="display:grid;gap:12px"></div>
@@ -138,6 +159,27 @@ footer { font-size: 12.5px; color: var(--muted); display: grid; gap: 6px; }
     <h2 id="hist-h">Recent signals</h2>
     <div class="tbl"><table id="hist"></table></div>
   </section>
+  </div>
+
+  <div id="tab-chart" role="tabpanel" hidden style="display:grid;gap:12px">
+    <div class="tfs" role="group" aria-label="Timeframe">
+      <button type="button" data-tf="M15">15 min</button>
+      <button type="button" data-tf="H1" aria-pressed="true">1 hour</button>
+      <button type="button" data-tf="H4">4 hour</button>
+    </div>
+    <div id="chart"></div>
+    <div class="legend">
+      <span><i style="border-color:var(--gold);border-top-style:dashed"></i>Breakout zone</span>
+      <span><i style="border-color:var(--muted)"></i>Breakout line</span>
+      <span><i style="border-color:#5b8def;border-top-style:dotted"></i>Neckline</span>
+      <span><i style="border-color:var(--ink)"></i>Entry</span>
+      <span><i style="border-color:var(--sell)"></i>Stop loss</span>
+      <span><i style="border-color:var(--buy)"></i>Take profit</span>
+    </div>
+    <h2>What the bot sees</h2>
+    <small class="muted">Tap a setup to draw it on the chart. Times are your local time.</small>
+    <div id="stories" style="display:grid;gap:10px"></div>
+  </div>
 
   <footer>
     <span id="src"></span>
@@ -145,6 +187,7 @@ footer { font-size: 12.5px; color: var(--muted); display: grid; gap: 6px; }
   </footer>
 </div>
 
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 <script>
 const DATA = /*__DATA__*/null;
 const $ = (id) => document.getElementById(id);
@@ -273,4 +316,149 @@ function render() {
 }
 render();
 setInterval(render, 60000);
+
+/* ---------------- Chart tab ---------------- */
+const TZ = -new Date().getTimezoneOffset() * 60;           // the chart library draws UTC; shift to local time
+const CH = DATA && DATA.chart;
+let chart = null, series = null, lines = [], tf = "H1", picked = 0;
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const priceOffset = () => { const m = parseFloat($("mt5").value); return isFinite(m) && m > 0 && DATA ? m - DATA.price : 0; };
+const when = (u) => new Date(u * 1000).toLocaleString([], { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+
+function showTab(name) {
+  ["signals", "chart"].forEach((n) => {
+    $("tab-" + n).hidden = n !== name;
+    $("t-" + n).setAttribute("aria-selected", String(n === name));
+  });
+  try { localStorage.setItem("gs-tab", name); } catch {}
+  if (name === "chart") drawChart();
+}
+$("t-signals").addEventListener("click", () => showTab("signals"));
+$("t-chart").addEventListener("click", () => showTab("chart"));
+document.querySelectorAll(".tfs button").forEach((b) => b.addEventListener("click", () => {
+  tf = b.dataset.tf;
+  document.querySelectorAll(".tfs button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  drawChart();
+}));
+
+// Everything that can be drawn: active signals first, then recent setups, then NY opening ranges
+function items() {
+  if (!CH) return [];
+  const out = [];
+  (DATA.signals || []).filter((s) => !s.strategy.startsWith("Your rules")).forEach((s) => out.push({ kind: "signal", s }));
+  [...CH.setups].reverse().forEach((s) => out.push({ kind: "setup", s }));
+  [...CH.ranges].reverse().forEach((r) => out.push({ kind: "range", s: r }));
+  return out;
+}
+
+function snap(bars, t) {               // marker times must sit on a bar of the shown timeframe
+  let lo = 0, hi = bars.length - 1, best = bars[0][0];
+  while (lo <= hi) { const m = (lo + hi) >> 1; if (bars[m][0] <= t) { best = bars[m][0]; lo = m + 1; } else hi = m - 1; }
+  return best;
+}
+
+function drawChart() {
+  const box = $("chart");
+  if (!CH) { box.textContent = "No chart data yet."; return; }
+  if (!window.LightweightCharts) { box.textContent = "The chart library didn't load. Check your connection and reload."; return; }
+  const off = priceOffset();
+  if (!chart) {
+    chart = LightweightCharts.createChart(box, {
+      autoSize: true,
+      layout: { background: { color: css("--surface") }, textColor: css("--muted"), fontFamily: "IBM Plex Mono, monospace" },
+      grid: { vertLines: { color: css("--line") }, horzLines: { color: css("--line") } },
+      rightPriceScale: { borderColor: css("--line") },
+      timeScale: { borderColor: css("--line"), timeVisible: true, secondsVisible: false },
+    });
+    series = chart.addCandlestickSeries({ upColor: css("--buy"), downColor: css("--sell"), borderVisible: false,
+      wickUpColor: css("--buy"), wickDownColor: css("--sell") });
+  }
+  const bars = CH[tf];
+  series.setData(bars.map(([t, o, h, l, c]) => ({ time: t + TZ, open: o + off, high: h + off, low: l + off, close: c + off })));
+  lines.forEach((l) => series.removePriceLine(l)); lines = [];
+  const line = (price, color, title, style = 0, width = 2) => price != null &&
+    lines.push(series.createPriceLine({ price: price + off, color, title, lineStyle: style, lineWidth: width, axisLabelVisible: true }));
+  const markers = [];
+  const mark = (t, pos, color, shape, text) => t && t >= bars[0][0] && markers.push({ time: snap(bars, t) + TZ, position: pos, color, shape, text });
+
+  const it = items()[picked];
+  let from = null, to = null;
+  if (it && it.kind === "setup") {
+    const s = it.s, sell = s.dir === "sell";
+    line(s.zhi, css("--gold"), "Zone", 2, 1); line(s.zlo, css("--gold"), "Zone", 2, 1);
+    line(s.line, css("--muted"), "Breakout line", 0, 1);
+    mark(s.t, sell ? "aboveBar" : "belowBar", css("--gold"), sell ? "arrowDown" : "arrowUp", "Breakout");
+    if (s.touched) mark(s.touched, sell ? "aboveBar" : "belowBar", css("--muted"), "circle", "Back in zone");
+    if (s.pattern) {
+      const p = s.pattern, nm = sell ? "High" : "Low";
+      line(p.neck, "#5b8def", "Neckline", 1, 2);
+      mark(p.t1, sell ? "aboveBar" : "belowBar", "#5b8def", "circle", nm + " 1");
+      mark(p.t2, sell ? "aboveBar" : "belowBar", "#5b8def", "circle", nm + " 2");
+    }
+    if (s.neck_break) mark(s.neck_break, sell ? "belowBar" : "aboveBar", "#5b8def", sell ? "arrowDown" : "arrowUp", "Neck break");
+    if (s.flip) mark(s.flip, sell ? "belowBar" : "aboveBar", css("--warn"), "square", "Broke through");
+    if (s.order) {
+      line(s.order.entry, css("--ink"), "Entry"); line(s.order.sl, css("--sell"), "SL"); line(s.order.tp, css("--buy"), "TP");
+      if (s.order.filled) mark(s.order.filled, "inBar", css("--ink"), "circle", "Filled");
+    }
+    from = s.t - 6 * 3600; to = Math.max(s.order && s.order.filled || 0, s.neck_break || 0, s.t) + 30 * 3600;
+  } else if (it && it.kind === "signal") {
+    const s = it.s;
+    line(s.entry, css("--ink"), "Entry"); line(s.sl, css("--sell"), "SL"); if (s.tp != null) line(s.tp, css("--buy"), "TP");
+  } else if (it && it.kind === "range") {
+    const r = it.s;
+    line(r.hi, css("--gold"), "Range high", 2, 1); line(r.lo, css("--gold"), "Range low", 2, 1);
+    mark(r.t0, "aboveBar", css("--gold"), "arrowDown", "09:30 NY");
+    from = r.t0 - 8 * 3600; to = r.t1 + 6 * 3600;
+  }
+  series.setMarkers(markers.sort((a, b) => a.time - b.time));
+  const last = bars[bars.length - 1][0];
+  if (from == null) { from = last - ({ M15: 2, H1: 6, H4: 25 }[tf]) * 86400; to = last; }
+  to = Math.min(to, last);
+  try { chart.timeScale().setVisibleRange({ from: from + TZ, to: to + TZ + 3600 }); } catch { chart.timeScale().fitContent(); }
+  drawStories();
+}
+
+function drawStories() {
+  const box = $("stories"); box.innerHTML = "";
+  const list = items();
+  if (!list.length) { box.innerHTML = `<div class="empty"><b>No setups in the last 30 days</b><span class="muted">Your rules need a tight consolidation and a strong breakout. They appear about once a month.</span></div>`; return; }
+  list.forEach((it, i) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "story-card"; b.setAttribute("aria-pressed", String(i === picked));
+    b.addEventListener("click", () => { picked = i; drawChart(); });
+    const off = priceOffset(), P = (v) => (v + off).toFixed(2);
+    if (it.kind === "setup") {
+      const s = it.s, sell = s.dir === "sell", word = sell ? "SELL" : "BUY";
+      const live = /waiting|looking/.test(s.status);
+      const steps = [
+        `<li><b>Storyline:</b> Monthly and Weekly trend ${sell ? "down" : "up"}, so only ${word} setups count.</li>`,
+        `<li><b>Breakout (${s.tf}):</b> price was stuck in a tight range, then broke ${sell ? "down" : "up"} on ${when(s.t)}. The breakout candle's body, ${P(s.zlo)}–${P(s.zhi)}, becomes the ${sell ? "sell" : "buy"} zone. Breakout line: ${P(s.line)}.</li>`,
+        `<li><b>Pullback:</b> ${s.touched ? `price came back into the zone on ${when(s.touched)}.` : "waiting for price to come back to the zone."}</li>`,
+        s.pattern
+          ? `<li><b>Confirmation (${s.ltf}):</b> ${s.pattern.kind === "double" ? (sell ? "double top" : "double bottom") : (sell ? "lower high" : "higher low")} at ${P(s.pattern.p1)} and ${P(s.pattern.p2)}. Neckline: ${P(s.pattern.neck)}.</li>`
+          : `<li><b>Confirmation (${s.ltf}):</b> ${s.touched ? "no pattern yet." : "not started."}</li>`,
+        s.neck_break ? `<li><b>Neckline break:</b> ${when(s.neck_break)}. The ${word.toLowerCase()} limit goes at the neckline.</li>` : "",
+        s.flip ? `<li><b>Rule 8:</b> price broke through the zone on ${when(s.flip)}. The setup flips to the other direction.</li>` : "",
+        s.order ? `<li><b>Order:</b> entry ${P(s.order.entry)}, SL ${P(s.order.sl)}, TP ${P(s.order.tp)}${s.order.filled ? `, filled ${when(s.order.filled)}` : ""}.</li>` : "",
+      ].join("");
+      const rr = s.order ? Math.abs(s.order.tp - s.order.entry) / Math.abs(s.order.entry - s.order.sl) : null;
+      const notes = [];
+      if (s.why_none) notes.push(s.why_none);
+      if (s.pattern && s.pattern.kind === "double") notes.push("Double tops/bottoms are skipped by your filters: they lost money in the 10-year test.");
+      if (rr != null && rr < 1) notes.push(`Target is only ${rr.toFixed(2)}× the stop. Your filter needs at least 1×, so no signal.`);
+      b.innerHTML = `<div class="row"><span class="side ${word}" style="font-size:15px">${word}</span><b>${s.tf} setup</b><span class="chip ${live ? "live" : ""}">${s.status}</span></div><ol>${steps}</ol>${notes.map((n) => `<span class="note">${n}</span>`).join("")}`;
+    } else if (it.kind === "signal") {
+      const s = it.s;
+      b.innerHTML = `<div class="row"><span class="side ${s.side}" style="font-size:15px">${s.side}</span><b>${s.strategy}</b><span class="chip live">active now</span></div><span class="muted"></span>`;
+      b.querySelector(".muted").textContent = s.why;
+    } else {
+      const r = it.s;
+      b.innerHTML = `<div class="row"><b>NY opening range</b><span class="chip">${when(r.t0)}</span></div><span class="muted">The 09:30–10:00 New York range: high ${P(r.hi)}, low ${P(r.lo)}. A 15-minute close outside it, in the trend direction, between 10:00 and 13:00 New York is a breakout trade. Best viewed on 15 min.</span>`;
+    }
+    box.appendChild(b);
+  });
+}
+$("mt5").addEventListener("input", () => { if (!$("tab-chart").hidden) drawChart(); });
+try { if (localStorage.getItem("gs-tab") === "chart") showTab("chart"); } catch {}
 </script>
