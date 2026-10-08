@@ -11,6 +11,7 @@ All three only trade with the Monthly/Weekly storyline (flips excepted) and skip
 Prices: Yahoo gold futures (GC=F), ~10-15 min delayed. Futures sit a few dollars above spot XAUUSD,
 so the app lets you type your MT5 price and shifts every level by the difference.
 """
+import hashlib
 import json
 import os
 import time
@@ -32,7 +33,7 @@ HEAD = """<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Gold Signals"><meta http-equiv="refresh" content="300">
+<meta name="apple-mobile-web-app-title" content="Gold Signals">
 <style>:root{padding:env(safe-area-inset-top,0) 0 env(safe-area-inset-bottom,0)}body{margin:0}[hidden]{display:none!important}</style>
 </head><body>"""
 V3 = Config2(min_rr=1.0, news_days="skip", skip_double=True, no_entry_utc=(17, 18, 19, 20, 21))
@@ -269,8 +270,9 @@ def main():
                 storyline=dict(monthly=word[int(p["M"])], weekly=word[int(p["W"])], daily=word[int(p["D"])],
                                bias={1: "BUY only", -1: "SELL only", 0: "No trend: stand aside"}[b]),
                 news_today=news_today, signals=sigs, history=hist[::-1][:30], chart=chart)
+    data["app_version"] = hashlib.sha1((APP / "template.html").read_bytes()).hexdigest()[:10]
     OUT.mkdir(parents=True, exist_ok=True)
-    (OUT / "signals.json").write_text(json.dumps(data, indent=1))
+    (OUT / "signals.json").write_text(json.dumps({k: data[k] for k in ("generated_at", "app_version")}))
     page = (APP / "template.html").read_text().replace("/*__DATA__*/null", json.dumps(data))
     (OUT / "index.html").write_text(HEAD + page + "</body></html>")
     (OUT / "robots.txt").write_text("User-agent: *\nDisallow: /\n")

@@ -103,7 +103,7 @@ footer { font-size: 12.5px; color: var(--muted); display: grid; gap: 6px; }
 <div class="wrap">
   <header>
     <div class="top"><h1>Gold Signals</h1><span class="price num" id="price">—</span></div>
-    <small class="muted" id="updated">Loading…</small>
+    <div class="top"><small class="muted" id="updated">Loading…</small><button type="button" id="refresh">↻ Refresh</button></div>
     <div class="stale" id="stale" hidden></div>
   </header>
 
@@ -479,4 +479,23 @@ function drawStories() {
 }
 $("mt5").addEventListener("input", () => { if (!$("tab-chart").hidden) drawChart(); });
 try { if (localStorage.getItem("gs-tab") === "chart") showTab("chart"); } catch {}
+
+/* ---------------- Updates: Refresh button + automatic check ---------------- */
+// Phones keep a saved copy of the page; loading it with a new ?r= value always fetches the newest version.
+function reloadFresh() { location.replace(location.pathname + "?r=" + Date.now()); }
+$("refresh").addEventListener("click", () => { $("refresh").textContent = "Refreshing…"; reloadFresh(); });
+async function checkForUpdate() {
+  if (!DATA) return;
+  try {
+    const r = await fetch("signals.json?t=" + Date.now(), { cache: "no-store" });
+    if (!r.ok) return;
+    const live = await r.json();
+    const newer = live.generated_at > DATA.generated_at || (live.app_version && live.app_version !== DATA.app_version);
+    const typing = document.activeElement && /INPUT|SELECT/.test(document.activeElement.tagName);
+    if (newer && !typing) reloadFresh();
+  } catch {}
+}
+setInterval(checkForUpdate, 120000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) checkForUpdate(); });
+setTimeout(checkForUpdate, 3000);
 </script>
