@@ -1,0 +1,249 @@
+<title>Gold Signals</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one narrow phone column — status strip, then trade tickets, then settings and record. */
+:root {
+  --bg: #f6f4ef; --surface: #ffffff; --ink: #1c1d22; --muted: #6b6a66; --line: #e4e0d6;
+  --gold: #a87508; --gold-soft: #f3e7c8;
+  --buy: #157a4a; --buy-soft: #e2f3ea; --sell: #b3312b; --sell-soft: #f8e3e1; --warn: #9a5b00; --warn-soft: #fbefd9;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "IBM Plex Sans", -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #15161a; --surface: #1e2025; --ink: #ecebe6; --muted: #9c9a93; --line: #2e3037;
+  --gold: #e0b04a; --gold-soft: #3a3020;
+  --buy: #4cc58a; --buy-soft: #173226; --sell: #f07a72; --sell-soft: #3a1f1e; --warn: #f0b45a; --warn-soft: #3a2c17; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #15161a; --surface: #1e2025; --ink: #ecebe6; --muted: #9c9a93; --line: #2e3037;
+  --gold: #e0b04a; --gold-soft: #3a3020;
+  --buy: #4cc58a; --buy-soft: #173226; --sell: #f07a72; --sell-soft: #3a1f1e; --warn: #f0b45a; --warn-soft: #3a2c17; color-scheme: dark }
+
+body { background: var(--bg); color: var(--ink); font: 15px/1.5 var(--body); }
+.wrap { max-width: 520px; margin: 0 auto; padding: 20px 16px 48px; display: grid; gap: 18px; }
+h1, h2 { font-family: var(--display); margin: 0; text-wrap: balance; }
+h1 { font-size: 26px; font-weight: 800; letter-spacing: -0.01em; }
+h2 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); }
+small { font-size: 12.5px; }
+
+header { display: grid; gap: 6px; }
+.top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.price { font-family: var(--mono); font-size: 22px; font-weight: 500; color: var(--gold); }
+.stale { background: var(--warn-soft); color: var(--warn); padding: 8px 12px; border-radius: 8px; font-size: 13.5px; }
+
+.story { display: grid; grid-template-columns: repeat(3, 1fr) 1.4fr; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.story > div { background: var(--surface); padding: 8px 10px; display: grid; gap: 2px; min-width: 0; }
+.story .k { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.story .v { font-family: var(--display); font-weight: 700; font-size: 14px; }
+.up { color: var(--buy); } .down { color: var(--sell); } .mixed { color: var(--muted); }
+
+.ticket { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.ticket .head { display: flex; align-items: center; gap: 10px; padding: 12px 14px; flex-wrap: wrap; }
+.side { font-family: var(--display); font-weight: 800; font-size: 20px; padding: 2px 10px; border-radius: 6px; }
+.side.BUY { background: var(--buy-soft); color: var(--buy); } .side.SELL { background: var(--sell-soft); color: var(--sell); }
+.ticket .order { font-weight: 600; }
+.conv { font: 700 11px var(--body); text-transform: uppercase; letter-spacing: 0.08em; padding: 3px 8px; border-radius: 999px; border: 1px solid currentColor; }
+.conv.HIGH { color: var(--gold); background: var(--gold-soft); } .conv.CAUTION { color: var(--warn); background: var(--warn-soft); } .conv.NORMAL { color: var(--muted); }
+.ticket.HIGH { border-color: var(--gold); border-width: 2px; } .ticket.CAUTION { border-style: dashed; }
+.ticket .strat { margin-left: auto; font-size: 12.5px; color: var(--muted); }
+.levels { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--line); }
+.levels > div { padding: 10px 14px; display: grid; gap: 2px; min-width: 0; }
+.levels > div + div { border-left: 1px solid var(--line); }
+.levels .k { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.levels .v { font-family: var(--mono); font-size: 18px; font-weight: 500; }
+.levels .d { font-size: 12px; color: var(--muted); font-family: var(--mono); }
+.sl .v { color: var(--sell); } .tp .v { color: var(--buy); }
+.size { border-top: 1px solid var(--line); padding: 12px 14px; display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; background: var(--gold-soft); }
+.size .big { font-family: var(--mono); font-size: 20px; font-weight: 500; text-align: right; }
+.why { padding: 10px 14px 12px; border-top: 1px solid var(--line); font-size: 13.5px; display: grid; gap: 6px; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+button { font: 600 13px var(--body); padding: 7px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+.empty { background: var(--surface); border: 1px dashed var(--line); border-radius: 12px; padding: 16px; display: grid; gap: 8px; }
+.empty b { font-family: var(--display); font-size: 18px; }
+.windows { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; font-size: 13.5px; }
+.windows li { display: flex; justify-content: space-between; gap: 12px; }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: grid; gap: 12px; }
+.fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+label { display: grid; gap: 4px; font-size: 12.5px; color: var(--muted); min-width: 0; }
+input { font: 500 16px var(--mono); padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); width: 100%; box-sizing: border-box; }
+.full { grid-column: 1 / -1; }
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+td, th { padding: 6px 4px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 500; }
+.tbl { overflow-x: auto; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.stats div { display: grid; }
+.stats .v { font-family: var(--mono); font-size: 18px; }
+footer { font-size: 12.5px; color: var(--muted); display: grid; gap: 6px; }
+@media (max-width: 380px) { .story { grid-template-columns: repeat(3, 1fr); } .story > div:last-child { grid-column: 1 / -1; } .levels .v { font-size: 16px; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="top"><h1>Gold Signals</h1><span class="price num" id="price">—</span></div>
+    <small class="muted" id="updated">Loading…</small>
+    <div class="stale" id="stale" hidden></div>
+  </header>
+
+  <section class="story" id="story" aria-label="Storyline"></section>
+
+  <section style="display:grid;gap:10px">
+    <h2>Trades right now</h2>
+    <div id="signals" style="display:grid;gap:12px"></div>
+  </section>
+
+  <section class="panel" aria-labelledby="set-h">
+    <h2 id="set-h">My account</h2>
+    <div class="fields">
+      <label>Account balance (USD)<input id="bal" type="number" inputmode="decimal" min="0" step="1" value="1000"></label>
+      <label>Risk scale<input id="scale" type="number" inputmode="decimal" min="0.1" max="1" step="0.1" value="0.5"></label>
+      <label class="full">XAUUSD price on my MT5 now (optional — lines the levels up with your broker)<input id="mt5" type="number" inputmode="decimal" step="0.01" placeholder="e.g. 4128.40"></label>
+      <label class="full">Ounces per 1.00 lot on my broker<input id="oz" type="number" inputmode="decimal" min="1" step="1" value="100"></label>
+    </div>
+    <small class="muted">Risk scale 0.5 = half the tested risk, recommended while you test. Saved on this phone only.</small>
+  </section>
+
+  <section class="panel" aria-labelledby="rec-h">
+    <h2 id="rec-h">What the backtest says (2016–2026)</h2>
+    <div class="stats">
+      <div><small class="muted">Accuracy</small><span class="v">51%</span></div>
+      <div><small class="muted">Trades / week</small><span class="v">~3</span></div>
+      <div><small class="muted">Worst drop</small><span class="v">−14%</span></div>
+    </div>
+    <div class="tbl"><table>
+      <tr><th>Strategy</th><th>Risk</th><th>Accuracy</th><th>When</th></tr>
+      <tr><td>Your rules (v3)</td><td class="num">2%</td><td class="num">53%</td><td>Any time, ~1 a month</td></tr>
+      <tr><td>NY opening-range breakout</td><td class="num">1%</td><td class="num">50%</td><td>10:00–13:00 New York</td></tr>
+      <tr><td>Session drift (buy only)</td><td class="num">0.5%</td><td class="num">52%</td><td>18:00 New York, uptrends</td></tr>
+    </table></div>
+    <div class="tbl"><table>
+      <tr><th>Flag</th><th>Size</th><th>What it means (10-year test)</th></tr>
+      <tr><td><span class="conv HIGH">High conviction</span></td><td class="num">×1.5</td><td>Rule 8 flips, or your-rules trades with target ≥ 2.5× the stop. 56% accuracy, +0.56R per trade.</td></tr>
+      <tr><td><span class="conv NORMAL">Normal</span></td><td class="num">×1</td><td>Standard setups.</td></tr>
+      <tr><td><span class="conv CAUTION">Caution</span></td><td class="num">×0.5</td><td>Friday NY breakouts: 42% accuracy, lost money. Half size or skip.</td></tr>
+    </table></div>
+    <small class="muted">About +12% a year in the backtest with these flags (+9% without). Past results are not a promise; live results are usually worse.</small>
+  </section>
+
+  <section class="panel" aria-labelledby="hist-h">
+    <h2 id="hist-h">Recent signals</h2>
+    <div class="tbl"><table id="hist"></table></div>
+  </section>
+
+  <footer>
+    <span id="src"></span>
+    <span>For personal use. Not financial advice. Test on a demo account before using real money.</span>
+  </footer>
+</div>
+
+<script>
+const DATA = /*__DATA__*/null;
+const $ = (id) => document.getElementById(id);
+const fmtT = (iso, opts) => new Date(iso).toLocaleString([], opts || { weekday: "short", hour: "2-digit", minute: "2-digit" });
+const money = (v) => "$" + v.toLocaleString(undefined, { maximumFractionDigits: 2 });
+
+function load(k, d) { try { const v = localStorage.getItem("gs-" + k); return v === null ? d : v; } catch { return d; } }
+function save(k, v) { try { localStorage.setItem("gs-" + k, v); } catch {} }
+["bal", "scale", "mt5", "oz"].forEach((k) => {
+  const el = $(k); el.value = load(k, el.value);
+  el.addEventListener("input", () => { save(k, el.value); render(); });
+});
+
+function nyToLocal(h, m) {
+  // next occurrence of h:m New York time, shown in the viewer's own time zone
+  const now = new Date();
+  for (let add = 0; add < 8; add++) {
+    const d = new Date(now.getTime() + add * 864e5);
+    const ymd = d.toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+    const guess = new Date(`${ymd}T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00Z`);
+    const nyStr = guess.toLocaleString("en-US", { timeZone: "America/New_York", hour12: false, hour: "2-digit", minute: "2-digit" });
+    const [gh, gm] = nyStr.split(":").map(Number);
+    const t = new Date(guess.getTime() + ((h - gh) * 60 + (m - gm)) * 6e4);
+    const wd = t.toLocaleDateString("en-US", { timeZone: "America/New_York", weekday: "short" });
+    if (t > now && wd !== "Sat" && wd !== "Sun") return t;
+  }
+}
+
+function ticket(s, offset) {
+  const bal = +$("bal").value || 0, scale = Math.min(1, Math.max(0.1, +$("scale").value || 0.5)), oz = +$("oz").value || 100;
+  const conv = s.conviction || "NORMAL", mult = s.size_mult || 1;
+  const riskPct = s.risk_pct * scale * mult, riskUsd = bal * riskPct / 100;
+  const lots = s.sl_dist > 0 ? riskUsd / (s.sl_dist * oz) : 0;
+  const lotTxt = lots >= 0.01 ? (Math.floor(lots * 100) / 100).toFixed(2) + " lot" : "below 0.01 lot";
+  const L = (v) => v == null ? "—" : (v + offset).toFixed(2);
+  const pips = (d) => d == null ? "" : `${money(d)} · ${Math.round(d * 10)} pips`;
+  const el = document.createElement("article");
+  el.className = "ticket " + conv;
+  el.innerHTML = `
+    <div class="head"><span class="side ${s.side}">${s.side}</span><span class="order"></span><span class="conv ${conv}">${conv === "HIGH" ? "High conviction" : conv === "CAUTION" ? "Caution" : "Normal"}</span><span class="strat"></span></div>
+    <div class="levels">
+      <div><span class="k">Entry</span><span class="v">${L(s.entry)}</span><span class="d">${s.order.includes("LIMIT") ? "limit order" : "market"}</span></div>
+      <div class="sl"><span class="k">Stop loss</span><span class="v">${L(s.sl)}</span><span class="d">${pips(s.sl_dist)}</span></div>
+      <div class="tp"><span class="k">Take profit</span><span class="v">${L(s.tp)}</span><span class="d">${s.tp == null ? "time exit" : pips(s.tp_dist)}</span></div>
+    </div>
+    <div class="size"><span>Position size<br><small class="muted">${riskPct.toFixed(2)}% of account${mult !== 1 ? ` (×${mult} for ${conv.toLowerCase()})` : ""} = ${money(riskUsd)} at risk${s.rr ? ` · reward ${s.rr}× risk` : ""}</small></span><span class="big">${lotTxt}</span></div>
+    <div class="why"><strong class="cnote"></strong><span class="txt"></span><small class="muted">Valid until ${fmtT(s.valid_until)} (your time)</small>
+      <div class="actions"><button type="button">Copy levels</button></div></div>`;
+  el.querySelector(".order").textContent = s.order;
+  el.querySelector(".strat").textContent = s.strategy;
+  el.querySelector(".txt").textContent = s.why;
+  el.querySelector(".cnote").textContent = s.conviction_note || "";
+  el.querySelector("button").addEventListener("click", async (e) => {
+    const text = `${s.side} XAUUSD ${s.order} | entry ${L(s.entry)} | SL ${L(s.sl)} | TP ${L(s.tp)} | ${lotTxt}`;
+    try { await navigator.clipboard.writeText(text); e.target.textContent = "Copied"; }
+    catch { e.target.textContent = text; }
+  });
+  return el;
+}
+
+function render() {
+  if (!DATA) { $("updated").textContent = "No data yet."; return; }
+  const mt5 = parseFloat($("mt5").value);
+  const offset = isFinite(mt5) && mt5 > 0 ? mt5 - DATA.price : 0;
+  $("price").textContent = (DATA.price + offset).toFixed(2);
+  const age = (Date.now() - new Date(DATA.generated_at)) / 6e4;
+  $("updated").textContent = `Updated ${fmtT(DATA.generated_at)} · prices as of ${fmtT(DATA.price_time, { hour: "2-digit", minute: "2-digit" })}` + (offset ? ` · shifted ${offset >= 0 ? "+" : ""}${offset.toFixed(2)} to your MT5 price` : "");
+  const st = $("stale");
+  st.hidden = age < 40;
+  st.textContent = `These signals are ${Math.round(age / 60) >= 1 ? Math.round(age / 60) + " h" : Math.round(age) + " min"} old. Don't act on them until the page updates.`;
+
+  const sl = DATA.storyline, cls = (v) => v.toLowerCase();
+  $("story").innerHTML = ["monthly", "weekly", "daily"].map((k) =>
+    `<div><span class="k">${k}</span><span class="v ${cls(sl[k])}">${sl[k] === "UP" ? "▲ Up" : sl[k] === "DOWN" ? "▼ Down" : "– Mixed"}</span></div>`).join("")
+    + `<div><span class="k">Today</span><span class="v">${sl.bias}</span></div>`;
+
+  const box = $("signals"); box.innerHTML = "";
+  if (DATA.news_today) {
+    box.innerHTML = `<div class="empty"><b>News day: no trades</b><span class="muted">Today has a Fed decision or US jobs report. The rules skip these days.</span></div>`;
+  } else if (DATA.signals.length) {
+    DATA.signals.forEach((s) => box.appendChild(ticket(s, offset)));
+  } else {
+    const orb = nyToLocal(10, 0), drift = nyToLocal(18, 0);
+    const f = (t) => t.toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" });
+    box.innerHTML = `<div class="empty"><b>No trade right now</b>
+      <span class="muted">Waiting for a setup. Nothing to do. Check back at:</span>
+      <ul class="windows">
+        <li><span>NY opening-range window opens</span><span class="num">${f(orb)}</span></li>
+        <li><span>Session drift check${sl.bias === "BUY only" ? "" : " (uptrends only)"}</span><span class="num">${f(drift)}</span></li>
+        <li><span>Your rules (v3)</span><span>any time</span></li>
+      </ul></div>`;
+  }
+
+  const h = $("hist");
+  if (!DATA.history.length) { h.innerHTML = `<tr><td class="muted">No signals yet. They'll be listed here as they appear.</td></tr>`; }
+  else {
+    h.innerHTML = `<tr><th>When</th><th>Trade</th><th>Entry</th><th>SL</th><th>TP</th></tr>` + DATA.history.map((s) =>
+      `<tr><td>${fmtT(s.first_seen, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</td><td><span class="${s.side === "BUY" ? "up" : "down"}">${s.side}</span> · ${s.strategy}</td><td class="num">${s.entry.toFixed(2)}</td><td class="num">${s.sl.toFixed(2)}</td><td class="num">${s.tp == null ? "—" : s.tp.toFixed(2)}</td></tr>`).join("");
+  }
+  $("src").textContent = `Source: ${DATA.source}. Levels are futures prices unless you enter your MT5 price above.`;
+}
+render();
+setInterval(render, 60000);
+</script>
