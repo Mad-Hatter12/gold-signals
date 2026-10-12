@@ -1,1 +1,21 @@
-[]
+[
+ {
+  "conviction": "NORMAL",
+  "size_mult": 1.0,
+  "conviction_note": "Normal: standard setup for this strategy.",
+  "id": "orb-20261012",
+  "strategy": "NY opening-range breakout",
+  "side": "SELL",
+  "order": "SELL NOW (market)",
+  "entry": 4189.0,
+  "sl": 4199.2,
+  "tp": 4168.6,
+  "sl_dist": 10.2,
+  "tp_dist": 20.4,
+  "rr": 2.0,
+  "risk_pct": 1.0,
+  "valid_until": "2026-10-12T20:00:00+00:00",
+  "why": "Price broke the 09:30-10:00 New York range in the trend direction. Close the trade by 16:00 New York if neither SL nor TP is hit.",
+  "first_seen": "2026-10-12T14:38:51.312551+00:00"
+ }
+]
