@@ -36,5 +36,24 @@
   "valid_until": "2026-10-13T22:00:00+00:00",
   "why": "Rule 8 flip: price broke through the zone, trade the other way at the zone edge",
   "first_seen": "2026-10-13T05:14:16.771448+00:00"
+ },
+ {
+  "conviction": "NORMAL",
+  "size_mult": 1.0,
+  "conviction_note": "Normal: standard setup for this strategy.",
+  "id": "orb-20261013",
+  "strategy": "NY opening-range breakout",
+  "side": "SELL",
+  "order": "SELL NOW (market)",
+  "entry": 4190.6,
+  "sl": 4213.5,
+  "tp": 4144.8,
+  "sl_dist": 22.9,
+  "tp_dist": 45.8,
+  "rr": 2.0,
+  "risk_pct": 1.0,
+  "valid_until": "2026-10-13T20:00:00+00:00",
+  "why": "Price broke the 09:30-10:00 New York range in the trend direction. Close the trade by 16:00 New York if neither SL nor TP is hit.",
+  "first_seen": "2026-10-13T14:50:41.838463+00:00"
  }
 ]
