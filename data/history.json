@@ -74,5 +74,24 @@
   "valid_until": "2026-10-19T20:00:00+00:00",
   "why": "Price broke the 09:30-10:00 New York range in the trend direction. Close the trade by 16:00 New York if neither SL nor TP is hit.",
   "first_seen": "2026-10-19T16:08:17.223449+00:00"
+ },
+ {
+  "conviction": "NORMAL",
+  "size_mult": 1.0,
+  "conviction_note": "Normal: standard setup for this strategy.",
+  "id": "v3-H4-202610221100-SELL",
+  "strategy": "Your rules (v3)",
+  "side": "SELL",
+  "order": "SELL LIMIT",
+  "entry": 4095.5,
+  "sl": 4110.94,
+  "tp": 4074.0,
+  "sl_dist": 15.44,
+  "tp_dist": 21.5,
+  "rr": 1.39,
+  "risk_pct": 2.0,
+  "valid_until": "2026-10-22T22:00:00+00:00",
+  "why": "H4 breakout zone + lower high pattern; limit at the neckline",
+  "first_seen": "2026-10-22T12:00:34.460957+00:00"
  }
 ]
