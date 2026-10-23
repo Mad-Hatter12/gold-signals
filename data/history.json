@@ -131,5 +131,24 @@
   "valid_until": "2026-10-23T22:00:00+00:00",
   "why": "H1 breakout zone + lower high pattern; limit at the neckline",
   "first_seen": "2026-10-23T05:14:47.003115+00:00"
+ },
+ {
+  "conviction": "CAUTION",
+  "size_mult": 0.5,
+  "conviction_note": "Caution: Friday opening-range breakouts lost money over 10 years (42% accuracy). Half size, or skip it.",
+  "id": "orb-20261023",
+  "strategy": "NY opening-range breakout",
+  "side": "SELL",
+  "order": "SELL NOW (market)",
+  "entry": 4021.7,
+  "sl": 4044.0,
+  "tp": 3977.1,
+  "sl_dist": 22.3,
+  "tp_dist": 44.6,
+  "rr": 2.0,
+  "risk_pct": 1.0,
+  "valid_until": "2026-10-23T20:00:00+00:00",
+  "why": "Price broke the 09:30-10:00 New York range in the trend direction. Close the trade by 16:00 New York if neither SL nor TP is hit.",
+  "first_seen": "2026-10-23T14:30:51.080862+00:00"
  }
 ]
